@@ -3,9 +3,11 @@
 
 using System;
 using System.Linq;
+using DevHome.Dashboard.Helpers;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Foundation;
+using Windows.UI.ViewManagement;
 
 namespace DevHome.Dashboard.Controls;
 
@@ -13,6 +15,8 @@ public sealed class WidgetBoard : Panel
 {
     private double _columnWidth;
     private const int _maxColumns = 4;
+
+    private readonly UISettings _uiSettings = new();
 
     // We need to control the HorizontalAlignment, so hide this property.
 #pragma warning disable SA1306 // Field names should begin with lower-case letter
@@ -33,6 +37,24 @@ public sealed class WidgetBoard : Panel
     {
         RegisterPropertyChangedCallback(Panel.HorizontalAlignmentProperty, OnHorizontalAlignmentChanged);
         HorizontalAlignment = HorizontalAlignment.Left;
+        Loaded += SubscribeToTextScaleFactor;
+        Unloaded += UnsubscribeToTextScaleFactor;
+    }
+
+    private void UnsubscribeToTextScaleFactor(object sender, RoutedEventArgs e)
+    {
+        _uiSettings.TextScaleFactorChanged += HandleTextScaleFactorChanged;
+    }
+
+    private void SubscribeToTextScaleFactor(object sender, RoutedEventArgs e)
+    {
+        _uiSettings.TextScaleFactorChanged -= HandleTextScaleFactorChanged;
+    }
+
+    private void HandleTextScaleFactorChanged(UISettings sender, object args)
+    {
+        var textScale = sender.TextScaleFactor;
+        WidgetWidth = WidgetHelpers.WidgetPxWidth * textScale;
     }
 
     /// <summary>
@@ -52,7 +74,7 @@ public sealed class WidgetBoard : Panel
         nameof(WidgetWidth),
         typeof(double),
         typeof(WidgetBoard),
-        new PropertyMetadata(300d, OnWidgetWidthChanged));
+        new PropertyMetadata(WidgetHelpers.WidgetPxWidth, OnWidgetWidthChanged));
 
     /// <summary>
     /// Gets or sets the distance between the border and its child object.

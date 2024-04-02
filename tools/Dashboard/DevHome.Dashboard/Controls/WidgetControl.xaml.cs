@@ -5,8 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using DevHome.Common.Extensions;
 using DevHome.Common.Services;
+using DevHome.Dashboard.Helpers;
 using DevHome.Dashboard.Services;
 using DevHome.Dashboard.ViewModels;
 using DevHome.Dashboard.Views;
@@ -16,16 +19,30 @@ using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Windows.Widgets;
 using Serilog;
+using Windows.UI.ViewManagement;
 
 namespace DevHome.Dashboard.Controls;
 
+[ObservableObject]
 public sealed partial class WidgetControl : UserControl
 {
     private readonly ILogger _log = Log.ForContext("SourceContext", nameof(WidgetControl));
 
+    private readonly UISettings _uiSettings = new();
+
     private readonly StringResource _stringResource;
 
     private SelectableMenuFlyoutItem _currentSelectedSize;
+
+    private const double WidgetPxHeightSmall = 146;
+    private const double WidgetPxHeightMedium = 304;
+    private const double WidgetPxHeightLarge = 462;
+
+    [ObservableProperty]
+    private double _widgetWidth;
+
+    [ObservableProperty]
+    private double _widgetHeight;
 
     public WidgetViewModel WidgetSource
     {
@@ -35,6 +52,10 @@ public sealed partial class WidgetControl : UserControl
             SetValue(WidgetSourceProperty, value);
             if (WidgetSource != null)
             {
+                var textScale = _uiSettings.TextScaleFactor;
+                WidgetHeight = GetPixelHeightFromWidgetSize(WidgetSource.WidgetSize) * textScale;
+                WidgetWidth = WidgetHelpers.WidgetPxWidth * textScale;
+
                 // When the WidgetViewModel is updated, the widget icon must also be also updated.
                 // Since the icon update must happen asynchronously on the UI thread, it must be
                 // called in code rather than binding.
@@ -51,6 +72,30 @@ public sealed partial class WidgetControl : UserControl
         this.InitializeComponent();
         _stringResource = new StringResource("DevHome.Dashboard.pri", "DevHome.Dashboard/Resources");
         ActualThemeChanged += OnActualThemeChanged;
+    }
+
+    [RelayCommand]
+    private void OnLoaded()
+    {
+        _uiSettings.TextScaleFactorChanged += HandleTextScaleFactorChanged;
+    }
+
+    [RelayCommand]
+    private void OnUnloaded()
+    {
+        _uiSettings.TextScaleFactorChanged -= HandleTextScaleFactorChanged;
+    }
+
+    private void HandleTextScaleFactorChanged(UISettings sender, object args)
+    {
+        if (WidgetSource == null)
+        {
+            return;
+        }
+
+        var textScale = sender.TextScaleFactor;
+        WidgetHeight = GetPixelHeightFromWidgetSize(WidgetSource.WidgetSize) * textScale;
+        WidgetWidth = WidgetHelpers.WidgetPxWidth * textScale;
     }
 
     private async void OpenWidgetMenuAsync(object sender, RoutedEventArgs e)
@@ -71,6 +116,17 @@ public sealed partial class WidgetControl : UserControl
                 }
             }
         }
+    }
+
+    public static double GetPixelHeightFromWidgetSize(WidgetSize size)
+    {
+        return size switch
+        {
+            WidgetSize.Small => WidgetPxHeightSmall,
+            WidgetSize.Medium => WidgetPxHeightMedium,
+            WidgetSize.Large => WidgetPxHeightLarge,
+            _ => 0,
+        };
     }
 
     private void AddRemoveToWidgetMenu(MenuFlyout widgetMenuFlyout, WidgetViewModel widgetViewModel)
